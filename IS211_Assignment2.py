@@ -7,14 +7,14 @@ import logging
 
 def downloadData(url):
     """Function to download the data from given url
-    using urllib2.
+    using urllib.
 
     Parameters:
         url : str
             URL string
 
     Returns:
-        The caller (object of urllib2)
+        The caller (object of urllib)
     """
 
     return urllib.urlopen(url)
