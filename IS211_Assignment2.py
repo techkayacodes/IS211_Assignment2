@@ -1,148 +1,70 @@
-import urllib
-import csv
 import argparse
-import datetime
+import urllib.request
 import logging
-
+import datetime
 
 def downloadData(url):
-    """Function to download the data from given url
-    using urllib.
-
-    Parameters:
-        url : str
-            URL string
-
-    Returns:
-        The caller (object of urllib)
-    """
-
-    return urllib.urlopen(url)
-
-
-def processData(infile):
-    """Function to process the data of the given file
-    and convert it into a dictionary and return it.
-
-    Parameters:
-        infile
-            Object returned by downloadData()
-            function.
-
-    Returns:
-        A dictionary having persons id as key and tuple
-        of name and datetime object as its value.
-    """
-    # dictionary to store processed data
-    processed_data = {}
-
-    # get csv reader object
-    csv_reader = csv.reader(infile)
-
-    # skip header
-    next(csv_reader)
-
-    # iterate through the reader object
-    for i, person in enumerate(csv_reader):
-        # try-except block to get rid of invalid data
-        try:
-            # get person id
-            p_id = int(person[0])
-            # get person name
-            p_name = person[1]
-            # get object of datetime object (it will raise an error if birthday
-            # is in invalid format)
-            p_birth_date = datetime.datetime.strptime(person[2], "%d/%m/%Y")
-
-            # if any error not raised, store the data into the dictionary
-            processed_data[p_id] = (p_name, p_birth_date)
-
-        # to log error if any exception raised while processing the data
-        except:
-            # prepare error message to log
-            error_msg = "Error processing line #{} for ID #{}.".format(i, p_id)
-            # open the error log file at ERROR level
-            logging.basicConfig(filename="error.log", level=logging.ERROR)
-            # get logger by name "assignment2"
-            logger = logging.getLogger("assignment2")
-            # write the error message
-            logger.error(error_msg)
-
-    # return the dictionary containing processed data
-    return processed_data
-
-
-def displayPerson(pid, dict_data):
-    """Function to get name of birthday of the
-    person having id equal to given pid parameter.
-
-    Parameters:
-        pid : int
-            An integer that represents the id of the
-            person for whom details should be returned.
-        dict_data : dict
-            Dictionary conataining data of all person
-            returned by the processData() function.
-
-    Prints:
-        A string containing id along with person's name
-        and birth date in the specified format:
-        Person # is <name>  with a birthday of <date>.
-    """
-
-    # check if person id exits in the dict_data
-    if pid in dict_data:  # if exists
-        # get name
-        name = dict_data[pid][0]
-        # get date in format "YYY-MM-DD"
-        bdate = datetime.datetime.strftime(dict_data[pid][1], "%Y-%m-%d")
-
-        # then, print the details
-        print("Person #{} is {}  with a birthday of {}.".format(pid, name, bdate))
-
-    # if person id not found the dict_data
-    else:
-        print("No user found with that id.")
-
-
-def main():
-    """Driver function to use the defined
-    functions to drive this program.
-    """
-
-    downloaded_data = None
-
-    # create an objecct of ArgumentParser for parsing command line arguments
-    parser = argparse.ArgumentParser()
-    # add arguments to the object
-    parser.add_argument("--url", required=True, help="Provide the csv file's URL.")
-    # parse the command line arguments
-    args = parser.parse_args()
-
-    # try to download the file using the url passed as arguments
     try:
-        downloaded_data = downloadData(args.url)
+        # Try to open the URL and read its contents
+        with urllib.request.urlopen(url) as response:
+            data = response.read().decode('utf-8')
+        return data
+    except Exception as e:
+        # If there's an error while downloading, print an error message and exit
+        print(f"Error downloading data: {str(e)}")
+        exit(1)
 
-    # if failed to download the file
-    except:
-        print("Error occured while downloading the file !!!")
+def processData(file_content):
+    personData = {}  # Create an empty dictionary to store person data
+    lines = file_content.split('\n')  # Split the file content into lines
+    for line_num, line in enumerate(lines[1:], start=2):
+        # Loop through each line in the file, skipping the header line (index 0)
+        parts = line.split(',')
+        if len(parts) == 3:
+            # Check if there are three parts (ID, name, birthday) in the line
+            user_id, name, birthday_str = parts
+            try:
+                # Convert the birthday string to a datetime object
+                birthday = datetime.datetime.strptime(birthday_str, '%d/%m/%Y')
+                # Store the person's data in the dictionary with ID as the key
+                personData[int(user_id)] = (name, birthday)
+            except ValueError:
+                # If there's an error parsing the date, log it with the line number and ID
+                logger.error(f"Error processing line #{line_num} for ID #{user_id}")
+    return personData
 
-    # process the data returned by the downloadData() function
-    process_dict = processData(downloaded_data)
+def displayPerson(id, personData):
+    if id in personData:
+        # If the ID exists in the person data, print the person's information
+        name, birthday = personData[id]
+        print(f"Person #{id} is {name} with a birthday of {birthday.strftime('%Y %m %d')}")
+    else:
+        # If the ID does not exist, print a message
+        print("No user found with that id")
 
-    # run loop until enter enter 0 or negative to exit
+def main(url):
+    csvData = downloadData(url)
+    
+    # Configure logging to write errors to a file called 'errors.log'
+    logging.basicConfig(filename='errors.log', level=logging.ERROR, format='Error processing line #%(lineno)d for ID #%(id)s')
+    logger = logging.getLogger('assignment2')
+    
+    personData = processData(csvData)  # Process the CSV data into a dictionary
+    
     while True:
-        # ask user to enter id to search
-        pid = int(input("Enter ID to lookup: "))
-
-        # check exit condition
-        if pid <= 0:
-            break
-
-        # otherwise, display the person data
-        else:
-            displayPerson(pid, process_dict)
-
+        user_input = input("Enter an ID to lookup (enter a negative number or 0 to exit): ")
+        try:
+            id = int(user_input)
+            if id <= 0:
+                # If the user enters a negative number or 0, exit the program
+                break
+            displayPerson(id, personData)  # Display the person's information
+        except ValueError:
+            # If the user enters invalid input, prompt them to enter a valid ID
+            print("Invalid input. Please enter a valid ID.")
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--url", help="URL to the datafile", type=str, required=True)
+    args = parser.parse_args()
+    main(args.url)
